@@ -1,7 +1,11 @@
 import { storageService } from '@/services/storageService'
 import type { BookData, BookFormat, ChapterContent } from '@/types/book'
 import type { BookParser } from '@/types/parser'
+import { withTimeout } from '@/utils/async'
 import { ensureBookFormat } from '@/utils/file'
+
+const PARSE_TIMEOUT_MS = 22_000
+const CHAPTER_TIMEOUT_MS = 16_000
 
 class BookService {
   private readonly activeParsers = new Map<string, BookParser>()
@@ -9,7 +13,18 @@ class BookService {
   async importBook(file: File): Promise<BookData> {
     const format = ensureBookFormat(file.name)
     const parser = await this.createParser(format)
-    const book = await parser.parse(file)
+
+    let book: BookData
+    try {
+      book = await withTimeout(
+        parser.parse(file),
+        PARSE_TIMEOUT_MS,
+        `${file.name} 解析超时，请尝试换一个 EPUB 文件或重新导出。`,
+      )
+    } catch (error) {
+      parser.destroy?.()
+      throw error
+    }
 
     this.activeParsers.set(book.id, parser)
     return book
@@ -31,7 +46,18 @@ class BookService {
     })
 
     const parser = await this.createParser(book.format)
-    const parsedBook = await parser.parse(file)
+
+    let parsedBook: BookData
+    try {
+      parsedBook = await withTimeout(
+        parser.parse(file),
+        PARSE_TIMEOUT_MS,
+        `${book.fileName} 恢复解析超时，请重新导入该书籍。`,
+      )
+    } catch (error) {
+      parser.destroy?.()
+      throw error
+    }
 
     this.activeParsers.set(book.id, parser)
 
@@ -53,7 +79,11 @@ class BookService {
       throw new Error('当前书籍尚未加载，请先完成书籍恢复')
     }
 
-    return parser.getChapter(index)
+    return withTimeout(
+      parser.getChapter(index),
+      CHAPTER_TIMEOUT_MS,
+      '章节加载超时，请切换章节后重试。',
+    )
   }
 
   getPageCount(bookId: string): number {

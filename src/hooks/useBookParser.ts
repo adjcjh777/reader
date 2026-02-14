@@ -46,7 +46,7 @@ export function useBookParser(): UseBookParserReturn {
           const message =
             error instanceof Error ? error.message : '导入文件时发生未知错误'
           setState({ isParsing: false, error: message })
-          throw error
+          return imported
         } finally {
           setBooks([...useLibraryStore.getState().books])
           setState((previous) => ({

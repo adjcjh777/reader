@@ -13,7 +13,7 @@ export function ImportZone({ onSelect, disabled }: ImportZoneProps) {
 
   return (
     <section
-      className={`import-zone${isDragging ? ' is-dragging' : ''}`}
+      className={`import-zone glass-card${isDragging ? ' is-dragging' : ''}`}
       onDragOver={(event) => {
         event.preventDefault()
         setIsDragging(true)
@@ -25,15 +25,20 @@ export function ImportZone({ onSelect, disabled }: ImportZoneProps) {
         void onSelect(event.dataTransfer.files)
       }}
     >
-      <Upload size={20} />
-      <div>
+      <span className="import-zone__icon">
+        <Upload size={18} />
+      </span>
+
+      <div className="import-zone__copy">
         <h3>导入你的电子书</h3>
         <p>支持 EPUB / MOBI / TXT，支持拖拽与批量选择</p>
       </div>
+
       <Button
         type="button"
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
+        className="import-zone__button"
       >
         选择文件
       </Button>

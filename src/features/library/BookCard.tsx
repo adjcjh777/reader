@@ -40,6 +40,9 @@ export function BookCard({ book, onOpen }: BookCardProps) {
       <div className="book-card__meta">
         <h3 title={book.title}>{book.title}</h3>
         <p>{book.author}</p>
+        <small>
+          {book.totalChapters} 章 · {book.format.toUpperCase()}
+        </small>
         <span className="book-card__status">
           {status.icon}
           {status.label}

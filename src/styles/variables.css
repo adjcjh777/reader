@@ -1,17 +1,22 @@
 :root {
-  --bg-primary: #f6f7fb;
-  --bg-secondary: rgba(255, 255, 255, 0.78);
-  --text-primary: #1d1d1f;
-  --text-secondary: #515154;
+  --bg-primary: radial-gradient(circle at 15% 0%, #f2f6ff 0%, #f5f5f7 32%, #f7f7f9 100%);
+  --bg-card: rgba(255, 255, 255, 0.74);
+  --bg-navbar: rgba(255, 255, 255, 0.68);
+  --reader-surface: linear-gradient(180deg, #f5f6fa 0%, #eceef4 100%);
+  --reader-paper: #fffef8;
+  --text-primary: #1f1f21;
+  --text-secondary: #5c5c63;
+  --text-tertiary: #7a7b83;
   --text-inverse: #ffffff;
-  --line-color: rgba(17, 17, 17, 0.08);
-  --brand-color: #4c6fff;
+  --line-color: rgba(17, 17, 17, 0.1);
+  --brand-color: #4265ff;
   --brand-color-soft: rgba(76, 111, 255, 0.12);
   --danger-color: #ff4d4f;
-  --shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.08);
-  --shadow-md: 0 14px 44px rgba(15, 23, 42, 0.12);
+  --shadow-xs: 0 2px 10px rgba(15, 23, 42, 0.08);
+  --shadow-sm: 0 8px 22px rgba(15, 23, 42, 0.1);
+  --shadow-md: 0 20px 52px rgba(15, 23, 42, 0.18);
   --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --navbar-height: 56px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --navbar-height: 72px;
 }

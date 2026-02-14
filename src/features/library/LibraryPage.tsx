@@ -1,5 +1,12 @@
 import { useMemo } from 'react'
-import { ArrowDownAZ, ListFilter } from 'lucide-react'
+import {
+  ArrowDownAZ,
+  BookOpen,
+  Flame,
+  Library,
+  ListFilter,
+  Loader2,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { BookGrid } from '@/features/library/BookGrid'
@@ -43,6 +50,15 @@ export function LibraryPage() {
     [books, filter, sortBy],
   )
 
+  const metrics = useMemo(
+    () => ({
+      total: books.length,
+      reading: books.filter((book) => book.status === 'reading').length,
+      finished: books.filter((book) => book.status === 'finished').length,
+    }),
+    [books],
+  )
+
   const handleOpenBook = (book: BookData) => {
     setCurrentBook(book.id)
     markBookStatus(book.id, 'reading')
@@ -56,11 +72,39 @@ export function LibraryPage() {
   return (
     <main className="library-page page-transition">
       <header className="library-page__header navbar">
-        <h1>Reader</h1>
-        <p>Apple Books 风格的本地阅读器</p>
+        <div>
+          <p className="library-page__eyebrow">资料库</p>
+          <h1>Reader</h1>
+        </div>
+        <span className="library-page__counter">{metrics.total} 本</span>
       </header>
 
-      <section className="library-page__toolbar">
+      <section className="library-hero glass-card fade-in">
+        <div className="library-hero__copy">
+          <p>Apple Books 风格 · 内容优先</p>
+          <h2>今天也来读几页</h2>
+          <span>把常读的书放在前面，沉浸感从打开书库就开始。</span>
+        </div>
+        <div className="library-hero__stats">
+          <article>
+            <BookOpen size={16} />
+            <strong>{metrics.reading}</strong>
+            <span>正在阅读</span>
+          </article>
+          <article>
+            <Library size={16} />
+            <strong>{metrics.total}</strong>
+            <span>藏书总数</span>
+          </article>
+          <article>
+            <Flame size={16} />
+            <strong>{metrics.finished}</strong>
+            <span>已完成</span>
+          </article>
+        </div>
+      </section>
+
+      <section className="library-page__toolbar glass-card">
         <div className="toolbar-group">
           <ListFilter size={16} />
           <SegmentedControl
@@ -81,10 +125,23 @@ export function LibraryPage() {
       </section>
 
       <ImportZone onSelect={handleImport} disabled={isParsing} />
-      {isParsing && <p className="status-text">正在解析文件...</p>}
+
+      {isParsing && (
+        <p className="status-text status-text--loading">
+          <Loader2 size={14} className="status-spin" />
+          正在解析文件...
+        </p>
+      )}
+
       {error && <p className="status-text status-text--error">{error}</p>}
 
-      <BookGrid books={visibleBooks} onOpen={handleOpenBook} />
+      <section className="library-section">
+        <header className="library-section__header">
+          <h2>你的书库</h2>
+          <span>{visibleBooks.length} 本</span>
+        </header>
+        <BookGrid books={visibleBooks} onOpen={handleOpenBook} />
+      </section>
     </main>
   )
 }

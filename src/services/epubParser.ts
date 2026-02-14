@@ -6,6 +6,7 @@ import type {
   TableOfContentsItem,
 } from '@/types/book'
 import type { BookParser } from '@/types/parser'
+import { withTimeout } from '@/utils/async'
 import { stripFileExtension } from '@/utils/text'
 
 type EpubNavigationItem = {
@@ -15,23 +16,48 @@ type EpubNavigationItem = {
   subitems?: EpubNavigationItem[]
 }
 
+type EpubMetadataLike = {
+  publisher?: string
+  language?: string
+  identifier?: string
+  description?: string
+  pubdate?: string
+  title?: string
+  creator?: string
+  author?: string
+}
+
+const EPUB_READY_TIMEOUT = 18_000
+const EPUB_META_TIMEOUT = 12_000
+const EPUB_CHAPTER_TIMEOUT = 15_000
+
 export class EpubParser implements BookParser {
   private book: ReturnType<typeof ePub> | null = null
   private metadata: BookMetadata = {}
   private toc: TableOfContentsItem[] = []
   private totalChapters = 0
-  private sourceUrl: string | null = null
 
   async parse(file: File): Promise<BookData> {
-    this.sourceUrl = URL.createObjectURL(file)
-    this.book = ePub(this.sourceUrl)
+    const buffer = await readFileAsArrayBuffer(file)
+    this.book = ePub(buffer)
 
-    await this.book.ready
+    await withTimeout(
+      this.book.ready,
+      EPUB_READY_TIMEOUT,
+      'EPUB 初始化超时，请检查文件是否完整或尝试重新导入。',
+    )
 
-    const [metadata, navigation] = await Promise.all([
+    const metadata = await withTimeout(
       this.book.loaded.metadata,
+      EPUB_META_TIMEOUT,
+      'EPUB 元数据读取超时。',
+    ).catch(() => ({}) as EpubMetadataLike)
+
+    const navigation = await withTimeout(
       this.book.loaded.navigation,
-    ])
+      EPUB_META_TIMEOUT,
+      'EPUB 目录读取超时。',
+    ).catch(() => ({ toc: [] as EpubNavigationItem[] }))
 
     this.metadata = {
       publisher: metadata.publisher,
@@ -41,10 +67,23 @@ export class EpubParser implements BookParser {
       publishDate: metadata.pubdate,
     }
 
-    this.toc = this.normalizeToc(navigation.toc ?? [])
-    this.totalChapters = this.book.spine.spineItems?.length ?? this.toc.length
+    this.totalChapters = this.book.spine.spineItems?.length ?? 0
+    this.toc = this.normalizeToc(navigation.toc ?? [], this.totalChapters)
+
+    if (this.totalChapters <= 0) {
+      this.totalChapters = this.toc.length
+    }
+
     if (this.totalChapters <= 0) {
       this.totalChapters = 1
+    }
+
+    if (this.toc.length === 0) {
+      this.toc = Array.from({ length: this.totalChapters }, (_, index) => ({
+        id: `chapter-${index}`,
+        label: `第 ${index + 1} 章`,
+        index,
+      }))
     }
 
     return {
@@ -56,7 +95,6 @@ export class EpubParser implements BookParser {
       metadata: this.metadata,
       toc: this.toc,
       fileName: file.name,
-      source: this.sourceUrl,
       createdAt: Date.now(),
       status: 'wantToRead',
     }
@@ -72,11 +110,21 @@ export class EpubParser implements BookParser {
       throw new Error('章节不存在')
     }
 
-    await section.load(this.book.load.bind(this.book))
-    const renderedContent = await section.render(this.book.load.bind(this.book))
+    await withTimeout(
+      section.load(this.book.load.bind(this.book)),
+      EPUB_CHAPTER_TIMEOUT,
+      '章节资源加载超时。',
+    )
+
+    const renderedContent = await withTimeout(
+      section.render(this.book.load.bind(this.book)),
+      EPUB_CHAPTER_TIMEOUT,
+      '章节渲染超时。',
+    )
+
     section.unload()
 
-    const fallbackTitle = `章节 ${index + 1}`
+    const fallbackTitle = `第 ${index + 1} 章`
     const tocItem = this.toc[index]
 
     return {
@@ -101,41 +149,56 @@ export class EpubParser implements BookParser {
   destroy(): void {
     this.book?.destroy()
     this.book = null
-
-    if (this.sourceUrl) {
-      URL.revokeObjectURL(this.sourceUrl)
-      this.sourceUrl = null
-    }
   }
 
   private normalizeToc(
     items: EpubNavigationItem[],
-    depth = 0,
-    startIndex = 0,
+    chapterCount: number,
   ): TableOfContentsItem[] {
     const result: TableOfContentsItem[] = []
-    let currentIndex = startIndex
+    const stack = [...items]
+    let fallbackIndex = 0
 
-    for (const item of items) {
-      const normalized: TableOfContentsItem = {
-        id: item.id ?? `${depth}-${currentIndex}`,
-        label: item.label?.trim() || `章节 ${currentIndex + 1}`,
+    while (stack.length > 0) {
+      const item = stack.shift()
+      if (!item) {
+        continue
+      }
+
+      result.push({
+        id: item.id ?? `toc-${fallbackIndex}`,
+        label: item.label?.trim() || `第 ${fallbackIndex + 1} 章`,
         href: item.href,
-        index: currentIndex,
-      }
+        index: Math.min(fallbackIndex, Math.max(chapterCount - 1, 0)),
+      })
 
-      if (item.subitems && item.subitems.length > 0) {
-        normalized.children = this.normalizeToc(
-          item.subitems,
-          depth + 1,
-          currentIndex,
-        )
-      }
+      fallbackIndex += 1
 
-      result.push(normalized)
-      currentIndex += 1
+      if (item.subitems?.length) {
+        stack.unshift(...item.subitems)
+      }
     }
 
     return result
   }
+}
+
+async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === 'function') {
+    return file.arrayBuffer()
+  }
+
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result)
+        return
+      }
+
+      reject(new Error('无法读取 EPUB 文件'))
+    }
+    reader.onerror = () => reject(new Error('读取 EPUB 文件失败'))
+    reader.readAsArrayBuffer(file)
+  })
 }
