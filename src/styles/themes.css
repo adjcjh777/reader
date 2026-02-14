@@ -1,0 +1,27 @@
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body[data-theme='dark'] {
+  --bg-primary: #101113;
+  --bg-secondary: rgba(31, 32, 36, 0.82);
+  --text-primary: #f4f4f5;
+  --text-secondary: #b5b6b9;
+  --text-inverse: #0f1115;
+  --line-color: rgba(255, 255, 255, 0.14);
+  --brand-color: #7f9bff;
+  --brand-color-soft: rgba(127, 155, 255, 0.18);
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 14px 44px rgba(0, 0, 0, 0.35);
+}
+
+body[data-theme='sepia'] {
+  --bg-primary: #f3ecdc;
+  --bg-secondary: rgba(255, 250, 240, 0.84);
+  --text-primary: #433423;
+  --text-secondary: #6d5a44;
+  --line-color: rgba(107, 88, 62, 0.16);
+  --brand-color: #8f6d3d;
+  --brand-color-soft: rgba(143, 109, 61, 0.17);
+}

@@ -1,0 +1,17 @@
+:root {
+  --bg-primary: #f6f7fb;
+  --bg-secondary: rgba(255, 255, 255, 0.78);
+  --text-primary: #1d1d1f;
+  --text-secondary: #515154;
+  --text-inverse: #ffffff;
+  --line-color: rgba(17, 17, 17, 0.08);
+  --brand-color: #4c6fff;
+  --brand-color-soft: rgba(76, 111, 255, 0.12);
+  --danger-color: #ff4d4f;
+  --shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 14px 44px rgba(15, 23, 42, 0.12);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --navbar-height: 56px;
+}
