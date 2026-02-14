@@ -35,6 +35,7 @@ export function useBookParser(): UseBookParserReturn {
         try {
           for (const file of files) {
             const book = await bookService.importBook(file)
+            await storageService.saveBookFile(book.id, file)
             addBook(book)
             imported.push(book)
           }

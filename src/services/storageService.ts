@@ -7,6 +7,7 @@ const KEYS = {
 } as const
 
 const progressKey = (bookId: string) => `reader:progress:${bookId}`
+const fileKey = (bookId: string) => `reader:file:${bookId}`
 
 export interface ReaderPreferences {
   fontSize: number
@@ -14,6 +15,14 @@ export interface ReaderPreferences {
   lineHeight: number
   pageWidth: number
   theme: 'light' | 'dark' | 'sepia'
+}
+
+export interface PersistedBookFile {
+  bookId: string
+  name: string
+  type: string
+  lastModified: number
+  buffer: ArrayBuffer
 }
 
 export const storageService = {
@@ -44,4 +53,43 @@ export const storageService = {
   async clearReadingProgress(bookId: string): Promise<void> {
     await del(progressKey(bookId))
   },
+
+  async saveBookFile(bookId: string, file: File): Promise<void> {
+    const payload: PersistedBookFile = {
+      bookId,
+      name: file.name,
+      type: file.type,
+      lastModified: file.lastModified,
+      buffer: await readFileAsArrayBuffer(file),
+    }
+
+    await set(fileKey(bookId), payload)
+  },
+
+  async loadBookFile(bookId: string): Promise<PersistedBookFile | null> {
+    return (await get<PersistedBookFile>(fileKey(bookId))) ?? null
+  },
+
+  async clearBookFile(bookId: string): Promise<void> {
+    await del(fileKey(bookId))
+  },
+}
+
+async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === 'function') {
+    return file.arrayBuffer()
+  }
+
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result)
+        return
+      }
+      reject(new Error('无法读取文件内容'))
+    }
+    reader.onerror = () => reject(new Error('文件读取失败'))
+    reader.readAsArrayBuffer(file)
+  })
 }

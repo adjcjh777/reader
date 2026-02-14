@@ -1,3 +1,8 @@
+import {
+  initMobiFile,
+  type Mobi,
+  type MobiTocItem,
+} from '@lingo-reader/mobi-parser'
 import type {
   BookData,
   BookMetadata,
@@ -5,59 +10,43 @@ import type {
   TableOfContentsItem,
 } from '@/types/book'
 import type { BookParser } from '@/types/parser'
-import { stripFileExtension, toParagraphHtml } from '@/utils/text'
+import { stripFileExtension } from '@/utils/text'
+
+type MobiSpineItem = {
+  id: string
+}
 
 export class MobiParser implements BookParser {
-  private chapters: ChapterContent[] = []
+  private mobi: Mobi | null = null
   private metadata: BookMetadata = {}
   private toc: TableOfContentsItem[] = []
+  private spine: MobiSpineItem[] = []
 
   async parse(file: File): Promise<BookData> {
-    const rawText = await this.bestEffortDecode(file)
-    const lines = rawText
-      .replace(/\r\n/g, '\n')
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
+    this.mobi = await initMobiFile(file)
 
-    const chunkSize = 180
-    this.chapters = []
-    for (let index = 0; index < lines.length; index += chunkSize) {
-      const chunkLines = lines.slice(index, index + chunkSize)
-      this.chapters.push({
-        title: `MOBI 第 ${Math.floor(index / chunkSize) + 1} 节`,
-        content: toParagraphHtml(chunkLines),
-        index: Math.floor(index / chunkSize),
-      })
-    }
-
-    if (this.chapters.length === 0) {
-      this.chapters = [
-        {
-          title: '正文',
-          content: '<p>暂时无法解析该 MOBI 的正文内容。</p>',
-          index: 0,
-        },
-      ]
-    }
-
-    this.toc = this.chapters.map((chapter, index) => ({
-      id: `mobi-${index}`,
-      label: chapter.title,
-      index,
-    }))
+    const rawMetadata = this.mobi.getMetadata()
+    this.spine = this.mobi.getSpine()
+    this.toc = this.normalizeToc(this.mobi.getToc())
 
     this.metadata = {
-      description:
-        '当前为 MOBI 基础兼容解析版本，后续可接入更完整的二进制结构解析库。',
+      publisher: rawMetadata.publisher,
+      language: rawMetadata.language,
+      isbn: rawMetadata.identifier,
+      description: rawMetadata.description,
+      publishDate: rawMetadata.published,
     }
+
+    const author = rawMetadata.author?.join('、') || '未知作者'
+    const cover = this.mobi.getCoverImage() || undefined
 
     return {
       id: crypto.randomUUID(),
-      title: stripFileExtension(file.name) || '未命名 MOBI',
-      author: '未知作者',
+      title: rawMetadata.title || stripFileExtension(file.name) || '未命名 MOBI',
+      author,
+      cover,
       format: 'mobi',
-      totalChapters: this.chapters.length,
+      totalChapters: this.spine.length || this.toc.length || 1,
       metadata: this.metadata,
       toc: this.toc,
       fileName: file.name,
@@ -67,12 +56,27 @@ export class MobiParser implements BookParser {
   }
 
   async getChapter(index: number): Promise<ChapterContent> {
-    const chapter = this.chapters[index]
+    if (!this.mobi) {
+      throw new Error('MOBI 解析器尚未初始化')
+    }
+
+    const chapter = this.spine[index]
     if (!chapter) {
       throw new Error('章节不存在')
     }
 
-    return chapter
+    const processed = this.mobi.loadChapter(chapter.id)
+    if (!processed) {
+      throw new Error('章节内容为空')
+    }
+
+    const title = this.toc[index]?.label ?? `章节 ${index + 1}`
+
+    return {
+      title,
+      content: processed.html,
+      index,
+    }
   }
 
   getMetadata(): BookMetadata {
@@ -84,46 +88,37 @@ export class MobiParser implements BookParser {
   }
 
   getPageCount(): number {
-    return this.chapters.length
+    return this.spine.length || this.toc.length
   }
 
-  private async bestEffortDecode(file: File): Promise<string> {
-    const buffer = await this.readArrayBuffer(file)
-    const utf8 = new TextDecoder().decode(buffer)
-    const cleaned = utf8
-      .split('')
-      .map((character) => {
-        const code = character.charCodeAt(0)
-        if (code >= 32 || character === '\n' || character === '\r' || character === '\t') {
-          return character
-        }
-        return ' '
-      })
-      .join('')
-
-    if (cleaned.trim().length > 0) {
-      return cleaned
-    }
-
-    return '该文件内容不可见，可能为受保护或非文本 MOBI。'
+  destroy(): void {
+    this.mobi?.destroy()
+    this.mobi = null
   }
 
-  private async readArrayBuffer(file: File): Promise<ArrayBuffer> {
-    if (typeof file.arrayBuffer === 'function') {
-      return file.arrayBuffer()
-    }
+  private normalizeToc(
+    items: MobiTocItem[],
+    depth = 0,
+    cursor = { value: 0 },
+  ): TableOfContentsItem[] {
+    return items.map((item) => {
+      const resolved = item.href && this.mobi ? this.mobi.resolveHref(item.href) : undefined
+      const linkedIndex = resolved
+        ? this.spine.findIndex((chapter) => chapter.id === resolved.id)
+        : -1
 
-    return new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (reader.result instanceof ArrayBuffer) {
-          resolve(reader.result)
-          return
-        }
-        reject(new Error('无法将文件读取为 ArrayBuffer'))
+      const index = linkedIndex >= 0 ? linkedIndex : cursor.value
+      cursor.value += 1
+
+      return {
+        id: `${depth}-${index}-${item.label}`,
+        label: item.label || `章节 ${index + 1}`,
+        href: item.href,
+        index,
+        children: item.children
+          ? this.normalizeToc(item.children, depth + 1, cursor)
+          : undefined,
       }
-      reader.onerror = () => reject(new Error('文件读取失败'))
-      reader.readAsArrayBuffer(file)
     })
   }
 }

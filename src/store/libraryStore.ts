@@ -13,6 +13,7 @@ interface LibraryStore {
   filter: LibraryFilter
   setBooks: (books: BookData[]) => void
   addBook: (book: BookData) => void
+  replaceBook: (book: BookData) => void
   removeBook: (bookId: string) => void
   setCurrentBook: (bookId: string | null) => void
   setViewMode: (mode: LibraryViewMode) => void
@@ -32,6 +33,10 @@ export const useLibraryStore = create<LibraryStore>((set) => ({
     set((state) => ({
       books: [book, ...state.books.filter((item) => item.id !== book.id)],
       currentBookId: state.currentBookId ?? book.id,
+    })),
+  replaceBook: (book) =>
+    set((state) => ({
+      books: state.books.map((item) => (item.id === book.id ? book : item)),
     })),
   removeBook: (bookId) =>
     set((state) => ({
